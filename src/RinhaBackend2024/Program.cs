@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using RinhaBackend2024.Commons;
 using RinhaBackend2024.Context;
 using RinhaBackend2024.Models;
 
@@ -11,9 +12,6 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 var app = builder.Build();
-
-const string credito = "c";
-const string debito = "d";
 
 app.MapPost("/clientes/{id:int}/transacoes/", async (int id, TransacaoInputModel inputModel, AppDbContext db) =>
 {
@@ -28,9 +26,12 @@ app.MapPost("/clientes/{id:int}/transacoes/", async (int id, TransacaoInputModel
     {
         return Results.UnprocessableEntity();
     }
+    
+    var tipo = inputModel.Tipo.ToLowerInvariant();
+    
+    var ehTipoValido = tipo == Contantes.Credito || tipo == Contantes.Debito;
 
-    if (!inputModel.Tipo.Equals(credito, StringComparison.InvariantCultureIgnoreCase) 
-        && !inputModel.Tipo.Equals(debito, StringComparison.InvariantCultureIgnoreCase))
+    if (!ehTipoValido)
     {
         return Results.UnprocessableEntity();
     }
@@ -40,22 +41,13 @@ app.MapPost("/clientes/{id:int}/transacoes/", async (int id, TransacaoInputModel
         return Results.UnprocessableEntity();
     }
 
-    if (inputModel.Tipo.Equals(debito, StringComparison.InvariantCultureIgnoreCase))
+    var ehTransacaoValida = cliente.AdicionarTransacao(inputModel.Valor, inputModel.Tipo, inputModel.Descricao);
+    
+    if (!ehTransacaoValida)
     {
-        var saldoRestante = cliente.Saldo - inputModel.Valor;
-
-        if (int.IsNegative(saldoRestante) && Math.Abs(saldoRestante) > cliente.Limite)
-        {
-            return Results.UnprocessableEntity();
-        }
-
-        cliente.Saldo = saldoRestante;
+        return Results.UnprocessableEntity();
     }
-    else
-    {
-        cliente.Saldo += inputModel.Valor;
-    }
-
+    
     try
     {
         await db.SaveChangesAsync();
@@ -71,6 +63,34 @@ app.MapPost("/clientes/{id:int}/transacoes/", async (int id, TransacaoInputModel
         cliente.Saldo
     });
 });
-    
-    
+
+
+app.MapGet("/clientes/{id:int}/extrato/", async (int id, AppDbContext db) =>
+{
+    var cliente = await db.Clientes.Where(x => x.Id == id)
+        .Select(x => new
+        {
+            Saldo = new
+            {
+                Total = x.Saldo,
+                Data_extrato = DateTime.UtcNow,
+                Limite = x.Limite
+            },
+            Ultimas_transacoes = x.Transacoes
+                .OrderByDescending(t => t.Data)
+                .Take(10)
+                .Select(t => new
+                {
+                    t.Valor,
+                    t.Tipo,
+                    t.Descricao,
+                    Realizada_em = t.Data
+                })
+        })
+        .FirstOrDefaultAsync();
+
+    return cliente is null ? Results.NotFound() : Results.Ok(cliente);
+});
+
+
 app.Run();
