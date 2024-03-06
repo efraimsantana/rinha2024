@@ -4,8 +4,11 @@ services:
   api01: &api
     # Lembre-se de que seu serviço HTTP deve estar hospedado num repositório
     # publicamente acessível! Ex.: hub.docker.com
-    image: ana/minha-api-matadora:latest
+    image: efraimsantana/rinha-api
     hostname: api01
+    build:
+        context: .
+        dockerfile: src/RinhaBackend2024/Dockerfile
     environment:
       - DB_HOSTNAME=db
     

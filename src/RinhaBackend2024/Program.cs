@@ -5,9 +5,11 @@ using RinhaBackend2024.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var dbHostname = Environment.GetEnvironmentVariable("DB_HOSTNAME") ?? "localhost";
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString?.Replace("{server}", dbHostname)));
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
